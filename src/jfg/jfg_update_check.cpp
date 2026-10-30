@@ -802,6 +802,73 @@ int jfg_http_download(const std::string& url, const fs::path& file, uint64_t exp
     return ok && write_ok ? 1 : 0;
 }
 
+bool jfg_http_request(const std::string& url, const std::string* post_data, const std::string& content_type,
+                      const std::string& user_agent, int& status, std::string& body) {
+    status = 0;
+    body.clear();
+    if (url.rfind("https://", 0) != 0) return false;
+#if defined(__ANDROID__)
+    std::string response;
+    const bool ok = with_activity_class([&](JNIEnv* env, jclass cls) {
+        jmethodID method = env->GetStaticMethodID(cls, "httpRequest",
+            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+        if (method == nullptr) return false;
+        jstring jurl = env->NewStringUTF(url.c_str());
+        jstring jpost = post_data != nullptr ? env->NewStringUTF(post_data->c_str()) : nullptr;
+        jstring jtype = env->NewStringUTF(content_type.c_str());
+        jstring jagent = env->NewStringUTF(user_agent.c_str());
+        auto result = static_cast<jstring>(env->CallStaticObjectMethod(cls, method, jurl, jpost, jtype, jagent));
+        for (jstring s : { jurl, jpost, jtype, jagent }) if (s != nullptr) env->DeleteLocalRef(s);
+        if (result == nullptr) return false;
+        const char* utf = env->GetStringUTFChars(result, nullptr);
+        response = utf;
+        env->ReleaseStringUTFChars(result, utf);
+        env->DeleteLocalRef(result);
+        return true;
+    });
+    const size_t newline = response.find('\n');
+    if (!ok || newline == std::string::npos) return false;
+    status = std::atoi(response.substr(0, newline).c_str());
+    body = response.substr(newline + 1);
+    return status > 0;
+#elif defined(_WIN32)
+    (void)post_data; (void)content_type; (void)user_agent;
+    return false; // TODO: WinHTTP (http_get above is GET-only)
+#else
+    // curl: the POST body goes through a temporary file (nothing of it on the command line); the status is appended
+    // after the body (-w).
+    auto quoted = [](const std::string& s) { return s.find('\'') == std::string::npos; };
+    if (!quoted(url) || !quoted(content_type) || !quoted(user_agent)) return false;
+    std::string command = "curl -sS -m 30 -A '" + user_agent + "'";
+    fs::path post_file;
+    if (post_data != nullptr) {
+        std::error_code ec;
+        post_file = fs::temp_directory_path(ec) / ("jfg-http-" + std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id())) + ".txt");
+        std::FILE* f = std::fopen(post_file.string().c_str(), "wb");
+        if (f == nullptr) return false;
+        std::fwrite(post_data->data(), 1, post_data->size(), f);
+        std::fclose(f);
+        command += " -H 'Content-Type: " + (content_type.empty() ? std::string("application/x-www-form-urlencoded") : content_type) + "'";
+        command += " --data-binary @'" + post_file.string() + "'";
+    }
+    command += " -w '\\n%{http_code}' '" + url + "' 2>/dev/null";
+    FILE* pipe = popen(command.c_str(), "r");
+    std::string response;
+    if (pipe != nullptr) {
+        char buffer[4096];
+        size_t got;
+        while ((got = std::fread(buffer, 1, sizeof(buffer), pipe)) > 0) response.append(buffer, got);
+        pclose(pipe);
+    }
+    if (!post_file.empty()) { std::error_code ec; fs::remove(post_file, ec); }
+    const size_t newline = response.rfind('\n');
+    if (newline == std::string::npos) return false;
+    status = std::atoi(response.substr(newline + 1).c_str());
+    body = response.substr(0, newline);
+    return status > 0;
+#endif
+}
+
 bool jfg_sha256_file(const fs::path& file, std::string& hex) {
 #ifdef _WIN32
     return sha256_of_file(file, hex);

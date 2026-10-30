@@ -25,6 +25,8 @@
 #include "jfg_options.h"
 #include "jfg_port.h"
 #include "jfg_update_check.h"
+#include "jfg_achievements.h"
+#include "config/config.hpp"
 
 void jfg_note_code_mods(); // jfg_mods.cpp
 
@@ -61,6 +63,7 @@ extern "C" void jfg_debug_frame(uint8_t* rdram, recomp_context* ctx) {
         ::jfg_note_code_mods();
     }
     jfg::api::fire(rdram, ctx, jfg::api::Event::GameTick, (int32_t)rd32(ADDR_delayDat));
+    jfg_achievements_frame(rdram);
     jfg::api::mod_camera_tick();
     jfg_camera_restore();
     load_options();
@@ -202,11 +205,20 @@ extern "C" void jfg_debug_frame(uint8_t* rdram, recomp_context* ctx) {
     }
     const float update_t = update_version.empty() ? -1.0f
         : std::chrono::duration<float>(std::chrono::steady_clock::now() - std::max(update_seen, hint_start + std::chrono::seconds(3))).count();
+#ifdef __ANDROID__
+    const bool update_toast = false; // updates install from the launcher on Windows only; an Android build has its own APK
+#else
     const bool update_toast = update_t >= 0.0f && update_t < UPDATE_SHOW && jfg_launcher_check_updates(); // not once turned off
+#endif
+    // RetroAchievements (jfg_achievements.cpp): an unlock, for a few seconds at the bottom of the screen.
+    constexpr float RA_SHOW = 4.0f;
+    std::string ra_text;
+    float ra_t = 0.0f;
+    const bool ra_toast = jfg_achievements_toast(ra_text, ra_t) && ra_t < RA_SHOW;
     std::string script_text;
     float script_alpha = 0.0f;
     const bool script_toast = lua_overlay_text(script_text, script_alpha);
-    dino::debug_ui::backend::set_overlay(hint_active || g.show_fps || g.show_level || g.show_pack || pack_toast || save_toast || update_toast || script_toast);
+    dino::debug_ui::backend::set_overlay(hint_active || g.show_fps || g.show_level || g.show_pack || pack_toast || save_toast || update_toast || script_toast || ra_toast);
 
     dino::debug_ui::ui_frame_begin();
     if (hint_active && dino::debug_ui::backend::in_ui_frame()) {
@@ -215,7 +227,8 @@ extern "C" void jfg_debug_frame(uint8_t* rdram, recomp_context* ctx) {
         if (t < 0.5f) alpha = t / 0.5f;
         else if (t > HINT_HOLD) alpha = std::max(0.0f, 1.0f - (t - HINT_HOLD) / HINT_FADE);
         const ImVec2 size = ImGui::GetIO().DisplaySize;
-        const char* text = "Settings: Select / Esc  -  Tools: F10"; // F9 (debug window) is named in the settings menu instead
+        // F9 (debug window) is named in the settings menu instead; a handheld has no keyboard for the F-keys.
+        const char* text = dino::config::handheld_ui() ? "Settings: Select" : "Settings: Select / Esc  -  Tools: F10";
         ImFont* font = ImGui::GetFont();
         const float font_size = std::max(18.0f, size.y / 32.0f);
         const ImVec2 extent = font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, text);
@@ -279,6 +292,22 @@ extern "C" void jfg_debug_frame(uint8_t* rdram, recomp_context* ctx) {
             ImGui::GetColorU32(ImVec4(1.0f, 178 / 255.0f, 26 / 255.0f, alpha)), line1.c_str());
         dl->AddText(font, small, ImVec2(size.x * 0.5f - e2.x * 0.5f, box0.y + pad + e1.y + pad * 0.3f),
             ImGui::GetColorU32(ImVec4(232 / 255.0f, 243 / 255.0f, 1.0f, alpha)), line2);
+    }
+    if (ra_toast && dino::debug_ui::backend::in_ui_frame()) {
+        // RetroAchievements: the launcher's gold on a dark band, bottom middle (above the start-up hint's place).
+        const ImVec2 size = ImGui::GetIO().DisplaySize;
+        ImFont* font = ImGui::GetFont();
+        const float font_size = std::max(18.0f, size.y / 30.0f);
+        const ImVec2 extent = font->CalcTextSizeA(font_size, FLT_MAX, size.x * 0.8f, ra_text.c_str());
+        const ImVec2 pos(size.x * 0.5f - extent.x * 0.5f, size.y * 0.80f);
+        float alpha = ra_t > RA_SHOW - 0.5f ? (RA_SHOW - ra_t) / 0.5f : 1.0f;
+        if (ra_t < 0.2f) alpha = ra_t / 0.2f;
+        const float pad = font_size * 0.5f;
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        dl->AddRectFilled(ImVec2(pos.x - pad, pos.y - pad * 0.5f), ImVec2(pos.x + extent.x + pad, pos.y + extent.y + pad * 0.5f),
+            ImGui::GetColorU32(ImVec4(5 / 255.0f, 11 / 255.0f, 28 / 255.0f, 0.85f * alpha)), pad * 0.4f);
+        dl->AddText(font, font_size, pos, ImGui::GetColorU32(ImVec4(1.0f, 178 / 255.0f, 26 / 255.0f, alpha)), ra_text.c_str(),
+                    nullptr, size.x * 0.8f);
     }
     if (save_toast && dino::debug_ui::backend::in_ui_frame()) {
         // Auto save: a small note in the bottom right corner, out of the way of the HUD's middle.
