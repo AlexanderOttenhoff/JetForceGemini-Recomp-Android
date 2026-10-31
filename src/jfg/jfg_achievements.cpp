@@ -8,9 +8,9 @@
 // - Casual only. RA turns unlocks from a client it hasn't approved into softcore unlocks, and a recompilation is not
 //   an approved emulator, so hardcore is never asked for. Everything the port adds (modern controls, 60 FPS, cutscene
 //   skip, cheats) stays available.
-// - Nothing runs and nothing is sent until the player logs in on the launcher's Achievements page. Logging in uses the
-//   password once: RA hands back a token, which is kept in retroachievements.json in the app folder; the password is
-//   not stored. Logging out deletes it.
+// - Nothing runs and nothing is sent until the player logs in (the RetroAchievements block on the launcher's Play page).
+//   Logging in uses the password once: RA hands back a token, which is kept in retroachievements.json in the app folder;
+//   the password is not stored. Logging out deletes it.
 // - Requests go to RA on worker threads (jfg_http_request); their replies are handed to rc_client on the game thread.
 // - Built from the lib/rcheevos submodule (JFG_HAS_RCHEEVOS); with -DJFG_RETROACHIEVEMENTS=OFF these functions do nothing.
 //
@@ -68,7 +68,7 @@ std::atomic<bool> g_game_requested{ false };
 std::mutex g_reply_mutex;
 std::deque<std::function<void()>> g_replies;
 
-// What the launcher's Achievements page shows (jfg_achievements_status).
+// What the launcher's RetroAchievements block shows (jfg_achievements_status).
 std::mutex g_status_mutex;
 JfgRaStatus g_status;
 

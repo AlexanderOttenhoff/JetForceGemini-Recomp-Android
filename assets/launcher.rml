@@ -54,11 +54,6 @@
 			#window:not([mouse-active]) .rl-btn:focus { top: -6dp; left: -6dp; border-color: #FFB21A; }
 			.rl-btn--exit { border-color: #FF4A4A; color: #FF4A4A; }
 			.rl-btn--exit:hover, #window:not([mouse-active]) .rl-btn--exit:focus { background-color: #FF4A4A; border-color: #FF4A4A; color: #050B1C; }
-			/* Two half-width buttons on one row (About and Achievements), so the sidebar keeps its height */
-			.rl-btn-row { display: flex; flex-direction: row; }
-			.rl-btn-row .rl-btn-shadow { flex: 1 1 0dp; }
-			.rl-btn-row .rl-btn-shadow + .rl-btn-shadow { margin-left: 14dp; }
-			.rl-btn-row .rl-btn { font-size: 17dp; }
 			.rl-separator { display: block; height: 2dp; margin: 6dp 0dp 18dp; background-color: #1F3D73; }
 			.rl-repo { display: inline-block; margin: 0dp; padding: 0dp 4dp; font-size: 15dp; font-family: "JetBrains Mono"; color: #FFB21A; background-color: transparent; border-width: 0dp; border-bottom-width: 2dp; border-color: #1F3D73; cursor: pointer; }
 			.rl-repo:hover { color: #E8F3FF; border-color: #3CC8FF; }
@@ -378,11 +373,12 @@
 			.st-actions { display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; margin-top: 8dp; }
 			.st-state { display: block; margin: 20dp 28dp 4dp 0dp; font-family: "JetBrains Mono"; font-weight: bold; font-size: 19dp; color: #3CF07A; }
 			.st-state.st-blocked { color: #FF6B5E; }
-			/* Achievements page */
+			/* RetroAchievements, on the Play page */
 			.ra-field { display: block; margin-top: 18dp; max-width: 640dp; }
 			.ra-label { display: block; font-size: 19dp; line-height: 26dp; color: #8199BF; margin-bottom: 6dp; }
 			.ra-input { display: block; width: 100%; margin-right: 0dp; }
 			.ra-paused { color: #FF6B5E; }
+			.ra-block { margin-top: 24dp; }
 			.st-progress { display: block; margin-top: 20dp; }
 			.st-progress-text { display: block; margin-bottom: 8dp; font-family: "JetBrains Mono"; font-size: 18dp; color: #E8F3FF; }
 			.st-result { display: block; margin-top: 12dp; font-family: "JetBrains Mono"; font-size: 17dp; line-height: 24dp; color: #8199BF; }
@@ -424,12 +420,8 @@
 								data-event-focus="set_page('mods')" style="nav-up: #tab_jfg_textures; nav-down: #tab_store; nav-right: auto;">Mods</button></div>
 							<div class="rl-btn-shadow"><button id="tab_store" class="rl-btn" data-class-rl-active="page == 'store'"
 								data-event-focus="set_page('store')" style="nav-up: #tab_mods; nav-down: #nav_about; nav-right: #st_filter_all;">Get Mods</button></div>
-							<div class="rl-btn-row">
-								<div class="rl-btn-shadow"><button id="nav_about" class="rl-btn" data-class-rl-active="page == 'about'"
-									data-event-focus="set_page('about')" style="nav-up: #tab_store; nav-down: #nav_exit; nav-right: #nav_achievements;">About</button></div>
-								<div class="rl-btn-shadow"><button id="nav_achievements" class="rl-btn" data-class-rl-active="page == 'achievements'"
-									data-event-focus="set_page('achievements')" style="nav-up: #tab_store; nav-down: #nav_exit; nav-left: #nav_about; nav-right: #ra_user;">Achievements</button></div>
-							</div>
+							<div class="rl-btn-shadow"><button id="nav_about" class="rl-btn" data-class-rl-active="page == 'about'"
+								data-event-focus="set_page('about')" style="nav-up: #tab_store; nav-down: #nav_exit;">About</button></div>
 							<div class="rl-separator"></div>
 							<div class="rl-btn-shadow"><button id="nav_exit" class="rl-btn rl-btn--exit" onclick="exit_game"
 								style="nav-up: #nav_about; nav-down: #nav_play;">Exit</button></div>
@@ -508,6 +500,28 @@
 											<div class="rl-skip-note">On: the game starts straight away with this ROM next time. In the game, the launcher button next to Quit in the settings menu (Select / Esc) brings you back here.</div>
 										</div>
 									</div>
+									<!-- RetroAchievements in casual mode (src/jfg/jfg_achievements.cpp) -->
+									<div class="rl-block-shadow ra-block"><div class="rl-block">
+										<div class="rl-heading">RetroAchievements</div>
+										<div class="rl-text">{{ra_status}}</div>
+										<div data-if="!ra_logged_in">
+											<div class="ra-field"><div class="ra-label">Username</div>
+												<input type="text" id="ra_user" class="st-add-text ra-input" data-value="ra_user" maxlength="64" style="nav-left: #nav_play; nav-down: #ra_pass;"
+													data-style-nav-up="rom_valid ? '#rl_skip_launcher' : '#rl_start'"/></div>
+											<div class="ra-field"><div class="ra-label">Password</div>
+												<input type="password" id="ra_pass" class="st-add-text ra-input" data-value="ra_pass" maxlength="128" style="nav-left: #nav_play; nav-up: #ra_user; nav-down: #ra_login;"/></div>
+											<div class="rl-action-shadow"><button id="ra_login" class="rl-action" data-event-click="ra_login()" data-attrif-disabled="ra_busy"
+												style="nav-left: #nav_play; nav-up: #ra_pass; nav-down: #rl_changelogs;">Log in</button></div>
+										</div>
+										<div data-if="ra_logged_in">
+											<div class="rl-text">{{ra_progress}}</div>
+											<div class="rl-text ra-paused" data-if="ra_paused != ''">Achievements paused: {{ra_paused}}</div>
+											<div class="rl-text rl-muted" data-if="ra_caution != ''">{{ra_caution}}</div>
+											<div class="rl-action-shadow"><button id="ra_logout" class="rl-action rl-action--outline" data-event-click="ra_logout()"
+												style="nav-left: #nav_play; nav-down: #rl_changelogs;" data-style-nav-up="rom_valid ? '#rl_skip_launcher' : '#rl_start'">Log out</button></div>
+										</div>
+										<div class="rl-text rl-muted">Casual (softcore) mode, with every setting of this port available. Your password is used once to log in and isn't stored; only RetroAchievements' login token is kept, and Log out removes it. Nothing is sent to RetroAchievements until you log in.</div>
+									</div></div>
 									<div class="rl-keys">
 										<div class="rl-heading">While playing</div>
 										<div class="rl-key-row"><div class="rl-key">Select / Esc</div><div>This settings menu (Profiles, General, Gameplay, Controls, Graphics and the rest)</div></div>
@@ -637,32 +651,6 @@
 								</div>
 
 								<!-- About -->
-								<!-- Achievements: RetroAchievements in casual mode (src/jfg/jfg_achievements.cpp) -->
-								<div class="rl-page rl-page-scroll" id="rl_page_achievements" data-if="page == 'achievements'">
-									<div class="rl-block-shadow"><div class="rl-block">
-										<div class="rl-heading">RetroAchievements</div>
-										<div class="rl-text">{{ra_status}}</div>
-										<div data-if="!ra_logged_in">
-											<div class="ra-field"><div class="ra-label">Username</div>
-												<input type="text" id="ra_user" class="st-add-text ra-input" data-value="ra_user" maxlength="64" style="nav-left: #nav_achievements; nav-up: none; nav-down: #ra_pass;"/></div>
-											<div class="ra-field"><div class="ra-label">Password</div>
-												<input type="password" id="ra_pass" class="st-add-text ra-input" data-value="ra_pass" maxlength="128" style="nav-left: #nav_achievements; nav-up: #ra_user; nav-down: #ra_login;"/></div>
-											<div class="rl-action-shadow"><button id="ra_login" class="rl-action" data-event-click="ra_login()" data-attrif-disabled="ra_busy"
-												style="nav-left: #nav_achievements; nav-up: #ra_pass; nav-down: none;">Log in</button></div>
-										</div>
-										<div data-if="ra_logged_in">
-											<div class="rl-text">{{ra_progress}}</div>
-											<div class="rl-text ra-paused" data-if="ra_paused != ''">Achievements paused: {{ra_paused}}</div>
-											<div class="rl-text rl-muted" data-if="ra_caution != ''">{{ra_caution}}</div>
-											<div class="rl-action-shadow"><button id="ra_logout" class="rl-action rl-action--outline" data-event-click="ra_logout()"
-												style="nav-left: #nav_achievements; nav-up: none; nav-down: none;">Log out</button></div>
-										</div>
-									</div></div>
-									<div class="rl-block-shadow"><div class="rl-block">
-										<div class="rl-heading">How it works</div>
-										<div class="rl-text rl-muted">Achievements are earned in casual (softcore) mode, with every setting of this port available. Your password is used once to log in and isn't stored; the game keeps only RetroAchievements' login token, and Log out removes it. Nothing is sent to RetroAchievements until you log in.</div>
-									</div></div>
-								</div>
 								<div class="rl-page rl-page-scroll" id="rl_page_about" data-if="page == 'about'">
 									<div class="rl-about">
 										<div class="rl-about-left">

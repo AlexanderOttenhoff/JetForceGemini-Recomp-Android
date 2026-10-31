@@ -10,13 +10,13 @@ been tested yet.
 
 ## Logging in
 
-Open the launcher's **Achievements** page, enter your RetroAchievements username and password and choose **Log in**.
+In the launcher's **Play** page, the **RetroAchievements** block: enter your RetroAchievements username and password and choose **Log in**.
 The password is used once and isn't stored: the game keeps only RetroAchievements' login token (in
 `retroachievements.json` in the game's folder, readable only by your account on Linux and Android) and logs in with
 it next time. **Log out** removes it. Nothing runs and
 nothing is sent to RetroAchievements until you log in.
 
-Once the game is running, the page shows how many of the set's achievements you have.
+Once the game is running, the block shows how many of the set's achievements you have.
 
 ## In the game
 

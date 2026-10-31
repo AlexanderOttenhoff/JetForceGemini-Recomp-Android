@@ -8,7 +8,7 @@
 
 enum class JfgRaState { LoggedOut, LoggingIn, LoggedIn, Failed };
 
-// What the launcher's Achievements page shows.
+// What the launcher's RetroAchievements block (Play page) shows.
 struct JfgRaStatus {
     JfgRaState state = JfgRaState::LoggedOut;
     std::string user;      // display name, when logged in
@@ -24,7 +24,7 @@ struct JfgRaStatus {
 
 // At start-up: logs in again with the token of an earlier login, if there is one; otherwise nothing runs.
 void jfg_achievements_init(const std::filesystem::path& app_folder, const std::string& version);
-// The launcher's Achievements page. The password is used once and not kept; logging out forgets the login.
+// The launcher's RetroAchievements block (Play page). The password is used once and not kept; logging out forgets the login.
 void jfg_achievements_login(const std::string& user, const std::string& password);
 void jfg_achievements_logout();
 JfgRaStatus jfg_achievements_status();

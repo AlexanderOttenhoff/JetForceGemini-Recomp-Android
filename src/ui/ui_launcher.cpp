@@ -19,7 +19,7 @@ static std::string version_string;
 #include "jfg/jfg_update_check.h"
 #include "jfg/jfg_pack_install.h"
 #include "jfg/jfg_mod_store.h" // JFG PORT: the Get Mods page
-#include "jfg/jfg_achievements.h" // JFG PORT: the Achievements page (RetroAchievements)
+#include "jfg/jfg_achievements.h" // JFG PORT: RetroAchievements, on the Play page
 #include "jfg/jfg_locale.h" // JFG PORT: texts set from here in the chosen language (jfg::locale::ui)
 #include "input/input.hpp" // JFG PORT: get_scanned_input_index (Esc on the bindings page)
 // A newer release exists (src/jfg/jfg_update_check.cpp): a banner on the Play page and a warning triangle next to the
@@ -65,7 +65,6 @@ static const LauncherPageInfo LAUNCHER_PAGES[] = {
     { "textures", "Texture Packs", "Pick a texture pack from the texture_packs folder, and dump the game's textures to make your own.", "tab_jfg_textures" },
     { "mods", "Mods", "Turn mods on and off, set their order and options, and install new ones.", "tab_mods" },
     { "store", "Get Mods", "Mods from VibinToast's collections: install, update and remove them.", "tab_store" },
-    { "achievements", "Achievements", "Earn RetroAchievements while you play, in casual mode.", "nav_achievements" },
     { "about", "About", "Jet Force Gemini: Recompiled.", "nav_about" },
 };
 static const LauncherPageInfo& launcher_page_info() {
@@ -254,7 +253,7 @@ static bool store_sources_dialog = false;
 static int store_sources_on = 0;
 // Its Add box (someone else's collection, "owner/repo" or its address) and why the last Add failed.
 static Rml::String store_add_text, store_add_msg;
-// JFG PORT: the Achievements page. The password field is emptied as soon as it has been sent.
+// JFG PORT: the RetroAchievements block on the Play page. The password field is emptied as soon as it has been sent.
 static Rml::String ra_user, ra_pass;
 static uint32_t ra_serial_seen = 0;
 static Rml::String store_filter = "all", store_selected;
@@ -458,7 +457,7 @@ void jfg_launcher_scroll(float pixels) {
 
 // Called every UI frame (ui_state.cpp): steps the VibinToast icon while the About page is shown.
 void jfg_launcher_ui_tick() {
-    // Achievements page: shown again when the login or the game's progress changes.
+    // RetroAchievements block (Play page): shown again when the login or the game's progress changes.
     if (model_handle) {
         const JfgRaStatus ra = jfg_achievements_status();
         if (ra.serial != ra_serial_seen) {
@@ -899,7 +898,7 @@ public:
         constructor.Bind("store_sources_dialog", &store_sources_dialog);
         constructor.Bind("store_sources_on", &store_sources_on);
         constructor.Bind("store_add_text", &store_add_text);
-        // Achievements page (RetroAchievements, src/jfg/jfg_achievements.cpp)
+        // RetroAchievements block on the Play page (src/jfg/jfg_achievements.cpp)
         constructor.Bind("ra_user", &ra_user);
         constructor.Bind("ra_pass", &ra_pass);
         constructor.BindFunc("ra_logged_in", [](Rml::Variant& out) { out = jfg_achievements_status().state == JfgRaState::LoggedIn; });
