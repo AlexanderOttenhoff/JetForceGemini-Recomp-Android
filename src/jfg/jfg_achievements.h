@@ -28,5 +28,13 @@ JfgRaStatus jfg_achievements_status();
 void jfg_achievements_frame(uint8_t* rdram);
 // While the game isn't running frames (launcher, pause): keeps requests moving.
 void jfg_achievements_idle();
-// The latest on-screen note (an unlock), and how long ago it came; false when there has been none.
-bool jfg_achievements_toast(std::string& text, float& seconds);
+// On-screen banners (unlocks, the game's progress when it loads, mastery), one at a time for JFG_RA_BANNER_SECONDS.
+struct JfgRaBanner {
+    std::string header; // "Achievement unlocked"
+    std::string title;  // the achievement's title
+    std::string detail; // its description
+    uint32_t points = 0;
+};
+constexpr float JFG_RA_BANNER_SECONDS = 5.0f;
+// The banner to show now, and how long it has been shown; false when there is none.
+bool jfg_achievements_banner(JfgRaBanner& out, float& seconds);
