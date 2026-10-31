@@ -210,11 +210,10 @@ extern "C" void jfg_debug_frame(uint8_t* rdram, recomp_context* ctx) {
 #else
     const bool update_toast = update_t >= 0.0f && update_t < UPDATE_SHOW && jfg_launcher_check_updates(); // not once turned off
 #endif
-    // RetroAchievements (jfg_achievements.cpp): an unlock, for a few seconds at the bottom of the screen.
-    constexpr float RA_SHOW = 4.0f;
-    std::string ra_text;
+    // RetroAchievements (jfg_achievements.cpp): unlock banners, one at a time.
+    JfgRaBanner ra_banner;
     float ra_t = 0.0f;
-    const bool ra_toast = jfg_achievements_toast(ra_text, ra_t) && ra_t < RA_SHOW;
+    const bool ra_toast = jfg_achievements_banner(ra_banner, ra_t);
     std::string script_text;
     float script_alpha = 0.0f;
     const bool script_toast = lua_overlay_text(script_text, script_alpha);
@@ -294,20 +293,43 @@ extern "C" void jfg_debug_frame(uint8_t* rdram, recomp_context* ctx) {
             ImGui::GetColorU32(ImVec4(232 / 255.0f, 243 / 255.0f, 1.0f, alpha)), line2);
     }
     if (ra_toast && dino::debug_ui::backend::in_ui_frame()) {
-        // RetroAchievements: the launcher's gold on a dark band, bottom middle (above the start-up hint's place).
+        // RetroAchievements banner, top middle: a small gold header, the title, the description, and the points on the
+        // right. Slides in from above and fades out.
         const ImVec2 size = ImGui::GetIO().DisplaySize;
         ImFont* font = ImGui::GetFont();
-        const float font_size = std::max(18.0f, size.y / 30.0f);
-        const ImVec2 extent = font->CalcTextSizeA(font_size, FLT_MAX, size.x * 0.8f, ra_text.c_str());
-        const ImVec2 pos(size.x * 0.5f - extent.x * 0.5f, size.y * 0.80f);
-        float alpha = ra_t > RA_SHOW - 0.5f ? (RA_SHOW - ra_t) / 0.5f : 1.0f;
-        if (ra_t < 0.2f) alpha = ra_t / 0.2f;
-        const float pad = font_size * 0.5f;
+        const float title_size = std::max(20.0f, size.y / 28.0f), small = title_size * 0.7f;
+        const float pad = title_size * 0.6f;
+        const float max_text = size.x * 0.5f;
+        const std::string points = ra_banner.points > 0 ? std::to_string(ra_banner.points) + " pts" : std::string();
+        const ImVec2 e_head = font->CalcTextSizeA(small, FLT_MAX, 0.0f, ra_banner.header.c_str());
+        const ImVec2 e_title = font->CalcTextSizeA(title_size, FLT_MAX, max_text, ra_banner.title.c_str());
+        const ImVec2 e_detail = ra_banner.detail.empty() ? ImVec2(0, 0) : font->CalcTextSizeA(small, FLT_MAX, max_text, ra_banner.detail.c_str());
+        const ImVec2 e_points = points.empty() ? ImVec2(0, 0) : font->CalcTextSizeA(title_size, FLT_MAX, 0.0f, points.c_str());
+        const float text_w = std::max({ e_head.x, e_title.x, e_detail.x });
+        const float width = text_w + (points.empty() ? 0.0f : e_points.x + pad * 1.5f) + pad * 2.0f;
+        const float height = e_head.y + e_title.y + (ra_banner.detail.empty() ? 0.0f : e_detail.y + pad * 0.2f) + pad * 2.0f;
+        const float slide = ra_t < 0.25f ? (1.0f - ra_t / 0.25f) : 0.0f;
+        float alpha = ra_t > JFG_RA_BANNER_SECONDS - 0.5f ? (JFG_RA_BANNER_SECONDS - ra_t) / 0.5f : 1.0f;
+        alpha = std::clamp(alpha, 0.0f, 1.0f);
+        // Below the update note when both are up (it uses the same top-middle spot).
+        const float top = size.y * 0.04f + toolbar_offset() + (update_toast ? size.y * 0.13f : 0.0f);
+        const ImVec2 box0(size.x * 0.5f - width * 0.5f, top - slide * (height + top));
+        const ImVec2 box1(box0.x + width, box0.y + height);
+        const ImU32 gold = ImGui::GetColorU32(ImVec4(1.0f, 178 / 255.0f, 26 / 255.0f, alpha));
         ImDrawList* dl = ImGui::GetForegroundDrawList();
-        dl->AddRectFilled(ImVec2(pos.x - pad, pos.y - pad * 0.5f), ImVec2(pos.x + extent.x + pad, pos.y + extent.y + pad * 0.5f),
-            ImGui::GetColorU32(ImVec4(5 / 255.0f, 11 / 255.0f, 28 / 255.0f, 0.85f * alpha)), pad * 0.4f);
-        dl->AddText(font, font_size, pos, ImGui::GetColorU32(ImVec4(1.0f, 178 / 255.0f, 26 / 255.0f, alpha)), ra_text.c_str(),
-                    nullptr, size.x * 0.8f);
+        dl->AddRectFilled(box0, box1, ImGui::GetColorU32(ImVec4(5 / 255.0f, 11 / 255.0f, 28 / 255.0f, 0.9f * alpha)), pad * 0.3f);
+        dl->AddRect(box0, box1, gold, pad * 0.3f, 0, 2.0f);
+        float y = box0.y + pad;
+        dl->AddText(font, small, ImVec2(box0.x + pad, y), gold, ra_banner.header.c_str());
+        y += e_head.y;
+        dl->AddText(font, title_size, ImVec2(box0.x + pad, y), ImGui::GetColorU32(ImVec4(232 / 255.0f, 243 / 255.0f, 1.0f, alpha)),
+                    ra_banner.title.c_str(), nullptr, max_text);
+        y += e_title.y + pad * 0.2f;
+        if (!ra_banner.detail.empty())
+            dl->AddText(font, small, ImVec2(box0.x + pad, y), ImGui::GetColorU32(ImVec4(129 / 255.0f, 153 / 255.0f, 191 / 255.0f, alpha)),
+                        ra_banner.detail.c_str(), nullptr, max_text);
+        if (!points.empty())
+            dl->AddText(font, title_size, ImVec2(box1.x - pad - e_points.x, box0.y + height * 0.5f - e_points.y * 0.5f), gold, points.c_str());
     }
     if (save_toast && dino::debug_ui::backend::in_ui_frame()) {
         // Auto save: a small note in the bottom right corner, out of the way of the HUD's middle.

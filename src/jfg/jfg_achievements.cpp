@@ -22,6 +22,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <fstream>
@@ -64,19 +65,20 @@ void set_status(JfgRaState state, const std::string& message) {
     g_status.serial++;
 }
 
-// The last unlock, for the overlay (jfg_tick.cpp).
-std::mutex g_toast_mutex;
-std::string g_toast_text;
-std::chrono::steady_clock::time_point g_toast_time{};
+// Banners for the overlay (jfg_tick.cpp), shown one after another: each from when it first reaches the front.
+std::mutex g_banner_mutex;
+std::deque<JfgRaBanner> g_banners;
+std::chrono::steady_clock::time_point g_banner_shown{};
+bool g_banner_showing = false;
 
 void log_line(const std::string& text) {
     std::fprintf(stderr, "[ra] %s\n", text.c_str());
 }
 
-void toast(const std::string& text) {
-    std::lock_guard lock(g_toast_mutex);
-    g_toast_text = text;
-    g_toast_time = std::chrono::steady_clock::now();
+void banner(const std::string& header, const std::string& title, const std::string& detail, uint32_t points) {
+    std::lock_guard lock(g_banner_mutex);
+    if (g_banners.size() >= 16) g_banners.pop_front(); // a burst (a save loaded with many unlocks): keep the latest
+    g_banners.push_back(JfgRaBanner{ header, title, detail, points });
 }
 
 uint32_t RC_CCONV read_memory(uint32_t address, uint8_t* buffer, uint32_t num_bytes, rc_client_t*) {
@@ -120,13 +122,13 @@ void RC_CCONV event_handler(const rc_client_event_t* event, rc_client_t*) {
     switch (event->type) {
         case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED:
             if (event->achievement != nullptr) {
-                toast(std::string("Achievement unlocked: ") + event->achievement->title + " (" +
-                      std::to_string(event->achievement->points) + ")");
+                banner("Achievement unlocked", event->achievement->title,
+                       event->achievement->description != nullptr ? event->achievement->description : "", event->achievement->points);
                 log_line(std::string("unlocked: ") + event->achievement->title);
             }
             break;
         case RC_CLIENT_EVENT_GAME_COMPLETED:
-            toast("All achievements unlocked!");
+            banner("Mastered", "Jet Force Gemini", "Every achievement in the set is unlocked.", 0);
             break;
         case RC_CLIENT_EVENT_SERVER_ERROR:
             if (event->server_error != nullptr && event->server_error->error_message != nullptr)
@@ -195,8 +197,9 @@ void RC_CCONV game_loaded(int result, const char* error, rc_client_t* client, vo
             g_status.total = summary.num_core_achievements;
             g_status.serial++;
         }
-        toast(std::string("RetroAchievements: ") + std::to_string(summary.num_unlocked_achievements) + "/" +
-              std::to_string(summary.num_core_achievements) + " unlocked (casual)");
+        banner("RetroAchievements", game->title,
+               std::to_string(summary.num_unlocked_achievements) + " of " + std::to_string(summary.num_core_achievements) +
+                   " achievements unlocked (casual)", 0);
     }
 }
 
@@ -215,6 +218,11 @@ void ensure_client() {
 void jfg_achievements_init(const fs::path& app_folder, const std::string& version) {
     g_folder = app_folder;
     g_version = version;
+    // JFG_RA_TEST_BANNER=1: a sample banner, to check the overlay's look without earning an achievement.
+    if (const char* test = std::getenv("JFG_RA_TEST_BANNER"); test != nullptr && test[0] == '1') {
+        banner("Achievement unlocked", "Particle Acceleration", "Sample banner (JFG_RA_TEST_BANNER): an achievement's description goes here.", 10);
+        banner("Achievement unlocked", "Second in the queue", "Shown after the first one.", 5);
+    }
     // A login from an earlier run: its token. Without one nothing runs until the player logs in on the launcher.
     std::ifstream tokens(token_file());
     if (!tokens) return;
@@ -276,12 +284,23 @@ void jfg_achievements_idle() {
     rc_client_idle(g_client);
 }
 
-bool jfg_achievements_toast(std::string& text, float& seconds) {
-    std::lock_guard lock(g_toast_mutex);
-    if (g_toast_text.empty()) return false;
-    seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - g_toast_time).count();
-    text = g_toast_text;
-    return true;
+bool jfg_achievements_banner(JfgRaBanner& out, float& seconds) {
+    std::lock_guard lock(g_banner_mutex);
+    const auto now = std::chrono::steady_clock::now();
+    while (!g_banners.empty()) {
+        if (!g_banner_showing) {
+            g_banner_showing = true;
+            g_banner_shown = now;
+        }
+        seconds = std::chrono::duration<float>(now - g_banner_shown).count();
+        if (seconds < JFG_RA_BANNER_SECONDS) {
+            out = g_banners.front();
+            return true;
+        }
+        g_banners.pop_front(); // done: the next one starts now
+        g_banner_showing = false;
+    }
+    return false;
 }
 
 #else // no rcheevos: RetroAchievements is off
@@ -297,6 +316,6 @@ JfgRaStatus jfg_achievements_status() {
 }
 void jfg_achievements_frame(uint8_t*) {}
 void jfg_achievements_idle() {}
-bool jfg_achievements_toast(std::string&, float&) { return false; }
+bool jfg_achievements_banner(JfgRaBanner&, float&) { return false; }
 
 #endif
