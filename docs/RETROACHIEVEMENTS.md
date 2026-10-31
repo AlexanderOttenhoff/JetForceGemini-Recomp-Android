@@ -15,8 +15,17 @@ The password is used once and isn't stored: the game keeps only RetroAchievement
 `retroachievements.json` in the game's folder) and logs in with it next time. **Log out** removes it. Nothing runs and
 nothing is sent to RetroAchievements until you log in.
 
-Once the game is running, the page shows how many of the set's achievements you have, a note at the bottom of the
-screen says the same when the game loads, and unlocks show there too.
+Once the game is running, the page shows how many of the set's achievements you have.
+
+## In the game
+
+- **Banners** at the top of the screen: your progress when the game loads, each unlock (title, description, points)
+  and mastering the set. Several are shown one after another.
+- **Challenge indicators** in the bottom right corner: while an achievement is primed (every condition met but the
+  last, such as "no damage taken" during a boss fight), its badge is shown until it unlocks or fails, as in
+  DuckStation and RetroArch. Badges are downloaded once into `ra_badges` in the game's folder.
+
+`JFG_RA_TEST_BANNER=1` shows two sample banners and a sample indicator (using `icons/64.png`), to check the look.
 
 ## How it works
 

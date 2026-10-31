@@ -214,10 +214,11 @@ extern "C" void jfg_debug_frame(uint8_t* rdram, recomp_context* ctx) {
     JfgRaBanner ra_banner;
     float ra_t = 0.0f;
     const bool ra_toast = jfg_achievements_banner(ra_banner, ra_t);
+    const std::vector<JfgRaIndicator> ra_indicators = jfg_achievements_indicators(); // primed achievements' badges
     std::string script_text;
     float script_alpha = 0.0f;
     const bool script_toast = lua_overlay_text(script_text, script_alpha);
-    dino::debug_ui::backend::set_overlay(hint_active || g.show_fps || g.show_level || g.show_pack || pack_toast || save_toast || update_toast || script_toast || ra_toast);
+    dino::debug_ui::backend::set_overlay(hint_active || g.show_fps || g.show_level || g.show_pack || pack_toast || save_toast || update_toast || script_toast || ra_toast || !ra_indicators.empty());
 
     dino::debug_ui::ui_frame_begin();
     if (hint_active && dino::debug_ui::backend::in_ui_frame()) {
@@ -330,6 +331,45 @@ extern "C" void jfg_debug_frame(uint8_t* rdram, recomp_context* ctx) {
                         ra_banner.detail.c_str(), nullptr, max_text);
         if (!points.empty())
             dl->AddText(font, title_size, ImVec2(box1.x - pad - e_points.x, box0.y + height * 0.5f - e_points.y * 0.5f), gold, points.c_str());
+    }
+    if (!ra_indicators.empty() && dino::debug_ui::backend::in_ui_frame()) {
+        // RetroAchievements challenge indicators: the badges of primed achievements, bottom right, side by side from
+        // the right edge, above where "Game saved" appears. Each badge row is drawn as runs of same-coloured pixels.
+        const ImVec2 size = ImGui::GetIO().DisplaySize;
+        const float icon = std::max(32.0f, size.y * 0.055f), gap = icon * 0.2f;
+        const float bottom = size.y - std::max(16.0f, size.y / 40.0f) * 2.6f - gap;
+        ImDrawList* dl = ImGui::GetForegroundDrawList();
+        const ImU32 gold = ImGui::GetColorU32(ImVec4(1.0f, 178 / 255.0f, 26 / 255.0f, 1.0f));
+        float right = size.x - gap * 1.5f;
+        for (const JfgRaIndicator& indicator : ra_indicators) {
+            const ImVec2 p0(right - icon, bottom - icon), p1(right, bottom);
+            dl->AddRectFilled(ImVec2(p0.x - 2, p0.y - 2), ImVec2(p1.x + 2, p1.y + 2), ImGui::GetColorU32(ImVec4(5 / 255.0f, 11 / 255.0f, 28 / 255.0f, 0.85f)));
+            if (indicator.rgba && indicator.width > 0 && indicator.height > 0) {
+                const std::vector<uint8_t>& px = *indicator.rgba;
+                const float sx = icon / indicator.width, sy = icon / indicator.height;
+                for (int y = 0; y < indicator.height; y++) {
+                    int x = 0;
+                    while (x < indicator.width) {
+                        const uint8_t* c = &px[((size_t)y * indicator.width + x) * 4];
+                        int run = 1;
+                        while (x + run < indicator.width && std::memcmp(c, &px[((size_t)y * indicator.width + x + run) * 4], 4) == 0) run++;
+                        if (c[3] != 0) {
+                            dl->AddRectFilled(ImVec2(p0.x + x * sx, p0.y + y * sy), ImVec2(p0.x + (x + run) * sx, p0.y + (y + 1) * sy),
+                                              IM_COL32(c[0], c[1], c[2], c[3]));
+                        }
+                        x += run;
+                    }
+                }
+            }
+            else {
+                // Still downloading (or no image): a gold "!" in its place.
+                ImFont* font = ImGui::GetFont();
+                const ImVec2 e = font->CalcTextSizeA(icon * 0.7f, FLT_MAX, 0.0f, "!");
+                dl->AddText(font, icon * 0.7f, ImVec2(p0.x + icon * 0.5f - e.x * 0.5f, p0.y + icon * 0.5f - e.y * 0.5f), gold, "!");
+            }
+            dl->AddRect(ImVec2(p0.x - 2, p0.y - 2), ImVec2(p1.x + 2, p1.y + 2), gold, 0.0f, 0, 2.0f);
+            right -= icon + gap;
+        }
     }
     if (save_toast && dino::debug_ui::backend::in_ui_frame()) {
         // Auto save: a small note in the bottom right corner, out of the way of the HUD's middle.
