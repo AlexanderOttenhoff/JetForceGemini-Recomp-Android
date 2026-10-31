@@ -331,6 +331,21 @@ target_link_libraries(JetForceGeminiRecompiled PRIVATE
     lunasvg
 )
 
+# JFG PORT: RetroAchievements (casual), when rcheevos is in lib/rcheevos (src/jfg/jfg_achievements.cpp). Without it
+# the game builds as before and RetroAchievements is off.
+if (EXISTS ${CMAKE_SOURCE_DIR}/lib/rcheevos/include/rc_client.h)
+    file(GLOB_RECURSE RCHEEVOS_SOURCES ${CMAKE_SOURCE_DIR}/lib/rcheevos/src/*.c)
+    list(FILTER RCHEEVOS_SOURCES EXCLUDE REGEX "rc_libretro\\.c$|rc_client_raintegration\\.c$")
+    add_library(rcheevos STATIC ${RCHEEVOS_SOURCES})
+    target_include_directories(rcheevos PUBLIC ${CMAKE_SOURCE_DIR}/lib/rcheevos/include)
+    target_compile_definitions(rcheevos PUBLIC RC_CLIENT_SUPPORTS_HASH)
+    target_compile_definitions(JetForceGeminiRecompiled PRIVATE JFG_HAS_RCHEEVOS)
+    target_link_libraries(JetForceGeminiRecompiled PRIVATE rcheevos)
+    message(STATUS "RetroAchievements: on (lib/rcheevos)")
+else()
+    message(STATUS "RetroAchievements: off (no lib/rcheevos)")
+endif()
+
 if (${WIN32})
     add_compile_definitions(NOMINMAX)
 endif()
