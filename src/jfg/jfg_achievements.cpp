@@ -325,7 +325,7 @@ std::string options_caution() {
     if (!jfg::g.keep_area_progress && !jfg::g.permanent_tribals) return {};
     const std::string which = jfg::g.keep_area_progress && jfg::g.permanent_tribals ? "Keep Area Progress and Permanent Tribal Saves are"
                             : jfg::g.keep_area_progress ? "Keep Area Progress is" : "Permanent Tribal Saves is";
-    return which + " on: some \"in one visit\" Tribal achievements are easier with it. Turn it off (Gameplay) to earn those as designed.";
+    return which + " on: some \"in one visit\" Tribal achievements are easier with it. Turn it off (Gameplay), or pick the Modern (Achievements) profile, to earn those as designed.";
 }
 
 // Once a second (game thread, and the launcher's while the game isn't running): pauses or resumes achievements, with
