@@ -38,6 +38,14 @@
 
 #include "jfg/jfg_update_check.h"
 
+// Badge images (PNG): a private copy of stb_image, PNG only.
+#define STB_IMAGE_STATIC
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#include "../../lib/rt64/src/contrib/stb/stb_image.h"
+#include <map>
+#include <memory>
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -63,6 +71,63 @@ void set_status(JfgRaState state, const std::string& message) {
     g_status.state = state;
     g_status.message = message;
     g_status.serial++;
+}
+
+// Challenge indicators: achievements that are primed (every condition met but the last, like "no damage taken" in a
+// boss fight), shown as their badges in a corner until they unlock or fail. Badges are downloaded once into ra_badges/
+// in the app folder and decoded to RGBA for the overlay.
+struct Badge {
+    int width = 0, height = 0;
+    std::shared_ptr<const std::vector<uint8_t>> rgba; // empty while loading, or when it couldn't be had
+};
+std::mutex g_challenge_mutex;
+std::map<std::string, Badge> g_badges; // by badge name
+struct Challenge { uint32_t id; std::string badge; std::string title; };
+std::vector<Challenge> g_challenges;
+
+void load_badge(const std::string& name, const std::string& url, const fs::path& local_override) {
+    {
+        std::lock_guard lock(g_challenge_mutex);
+        if (g_badges.count(name)) return; // loaded or on its way
+        g_badges[name] = Badge{};
+    }
+    std::thread([=]() {
+        fs::path file = local_override;
+        std::error_code ec;
+        if (file.empty()) {
+            const fs::path dir = g_folder / "ra_badges";
+            fs::create_directories(dir, ec);
+            file = dir / (name + ".png");
+            if (!fs::exists(file, ec) && !url.empty()) {
+                const fs::path part = dir / (name + ".png.part");
+                if (jfg_http_download(url, part, 0, nullptr) == 1) fs::rename(part, file, ec);
+                else fs::remove(part, ec);
+            }
+        }
+        int w = 0, h = 0, n = 0;
+        stbi_uc* pixels = stbi_load(file.string().c_str(), &w, &h, &n, 4);
+        Badge badge;
+        if (pixels != nullptr) {
+            badge.width = w;
+            badge.height = h;
+            badge.rgba = std::make_shared<const std::vector<uint8_t>>(pixels, pixels + (size_t)w * h * 4);
+            stbi_image_free(pixels);
+        }
+        std::lock_guard lock(g_challenge_mutex);
+        g_badges[name] = badge;
+    }).detach();
+}
+
+void show_challenge(uint32_t id, const std::string& badge, const std::string& url, const std::string& title, const fs::path& local = {}) {
+    load_badge(badge, url, local);
+    std::lock_guard lock(g_challenge_mutex);
+    for (const Challenge& c : g_challenges) if (c.id == id) return;
+    g_challenges.push_back(Challenge{ id, badge, title });
+}
+
+void hide_challenge(uint32_t id) {
+    std::lock_guard lock(g_challenge_mutex);
+    std::erase_if(g_challenges, [id](const Challenge& c) { return c.id == id; });
 }
 
 // Banners for the overlay (jfg_tick.cpp), shown one after another: each from when it first reaches the front.
@@ -122,10 +187,20 @@ void RC_CCONV event_handler(const rc_client_event_t* event, rc_client_t*) {
     switch (event->type) {
         case RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED:
             if (event->achievement != nullptr) {
+                hide_challenge(event->achievement->id);
                 banner("Achievement unlocked", event->achievement->title,
                        event->achievement->description != nullptr ? event->achievement->description : "", event->achievement->points);
                 log_line(std::string("unlocked: ") + event->achievement->title);
             }
+            break;
+        case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW:
+            if (event->achievement != nullptr) {
+                show_challenge(event->achievement->id, event->achievement->badge_name,
+                               event->achievement->badge_url != nullptr ? event->achievement->badge_url : "", event->achievement->title);
+            }
+            break;
+        case RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE:
+            if (event->achievement != nullptr) hide_challenge(event->achievement->id);
             break;
         case RC_CLIENT_EVENT_GAME_COMPLETED:
             banner("Mastered", "Jet Force Gemini", "Every achievement in the set is unlocked.", 0);
@@ -222,6 +297,7 @@ void jfg_achievements_init(const fs::path& app_folder, const std::string& versio
     if (const char* test = std::getenv("JFG_RA_TEST_BANNER"); test != nullptr && test[0] == '1') {
         banner("Achievement unlocked", "Particle Acceleration", "Sample banner (JFG_RA_TEST_BANNER): an achievement's description goes here.", 10);
         banner("Achievement unlocked", "Second in the queue", "Shown after the first one.", 5);
+        show_challenge(1, "test", "", "Sample challenge (JFG_RA_TEST_BANNER)", fs::path("icons/64.png"));
     }
     // A login from an earlier run: its token. Without one nothing runs until the player logs in on the launcher.
     std::ifstream tokens(token_file());
@@ -246,6 +322,10 @@ void jfg_achievements_login(const std::string& user, const std::string& password
 
 void jfg_achievements_logout() {
     if (g_client != nullptr) rc_client_logout(g_client);
+    {
+        std::lock_guard lock(g_challenge_mutex);
+        g_challenges.clear();
+    }
     std::error_code ec;
     fs::remove(token_file(), ec);
     g_game_requested = false;
@@ -303,6 +383,22 @@ bool jfg_achievements_banner(JfgRaBanner& out, float& seconds) {
     return false;
 }
 
+std::vector<JfgRaIndicator> jfg_achievements_indicators() {
+    std::vector<JfgRaIndicator> out;
+    std::lock_guard lock(g_challenge_mutex);
+    for (const Challenge& c : g_challenges) {
+        JfgRaIndicator indicator;
+        indicator.title = c.title;
+        if (auto it = g_badges.find(c.badge); it != g_badges.end()) {
+            indicator.width = it->second.width;
+            indicator.height = it->second.height;
+            indicator.rgba = it->second.rgba;
+        }
+        out.push_back(std::move(indicator));
+    }
+    return out;
+}
+
 #else // no rcheevos: RetroAchievements is off
 
 void jfg_achievements_init(const std::filesystem::path&, const std::string&) {}
@@ -317,5 +413,6 @@ JfgRaStatus jfg_achievements_status() {
 void jfg_achievements_frame(uint8_t*) {}
 void jfg_achievements_idle() {}
 bool jfg_achievements_banner(JfgRaBanner&, float&) { return false; }
+std::vector<JfgRaIndicator> jfg_achievements_indicators() { return {}; }
 
 #endif

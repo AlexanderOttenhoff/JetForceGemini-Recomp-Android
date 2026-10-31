@@ -2,7 +2,9 @@
 // Jet Force Gemini port: RetroAchievements, casual only (jfg_achievements.cpp).
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
+#include <vector>
 
 enum class JfgRaState { LoggedOut, LoggingIn, LoggedIn, Failed };
 
@@ -38,3 +40,12 @@ struct JfgRaBanner {
 constexpr float JFG_RA_BANNER_SECONDS = 5.0f;
 // The banner to show now, and how long it has been shown; false when there is none.
 bool jfg_achievements_banner(JfgRaBanner& out, float& seconds);
+
+// Challenge indicators: the badges of achievements that are primed right now (every condition met but the last), for
+// a corner of the screen. rgba is null while the badge is still loading (or couldn't be had): draw a placeholder.
+struct JfgRaIndicator {
+    std::string title;
+    int width = 0, height = 0;
+    std::shared_ptr<const std::vector<uint8_t>> rgba;
+};
+std::vector<JfgRaIndicator> jfg_achievements_indicators();
