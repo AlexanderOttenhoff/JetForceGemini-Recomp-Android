@@ -10,22 +10,13 @@ been tested yet.
 
 ## Logging in
 
-Nothing runs and nothing is sent to RetroAchievements until you log in. For now there is no login form in the
-launcher, so:
+Open the launcher's **Achievements** page, enter your RetroAchievements username and password and choose **Log in**.
+The password is used once and isn't stored: the game keeps only RetroAchievements' login token (in
+`retroachievements.json` in the game's folder) and logs in with it next time. **Log out** removes it. Nothing runs and
+nothing is sent to RetroAchievements until you log in.
 
-1. Make a text file called `retroachievements.txt` in the game's folder (on Android:
-   `Android/data/io.github.jfgrecomp/files`), with two lines:
-
-   ```
-   username=YourName
-   password=YourPassword
-   ```
-
-2. Start the game. It logs in once, keeps only the login token (in `retroachievements.json`) and deletes
-   `retroachievements.txt`, so your password isn't stored.
-3. Load your game: a note at the bottom of the screen shows how many achievements you have. Unlocks show there too.
-
-To log out, delete `retroachievements.json`.
+Once the game is running, the page shows how many of the set's achievements you have, a note at the bottom of the
+screen says the same when the game loads, and unlocks show there too.
 
 ## How it works
 
