@@ -17,6 +17,8 @@ struct JfgRaStatus {
     uint32_t unlocked = 0; // this game's achievements: unlocked and in total, once the game is loaded
     uint32_t total = 0;
     bool game_loaded = false;
+    std::string paused;    // why achievements are paused (a gameplay mod is on), or empty while they count
+    std::string caution;   // options on that make some achievements easier, or empty
     uint32_t serial = 0;   // changes whenever anything above does
 };
 
@@ -26,7 +28,7 @@ void jfg_achievements_init(const std::filesystem::path& app_folder, const std::s
 void jfg_achievements_login(const std::string& user, const std::string& password);
 void jfg_achievements_logout();
 JfgRaStatus jfg_achievements_status();
-// Once per game frame, on the game thread (jfg_debug_frame).
+// Once per game tick, on the game thread (jfg_debug_frame). The set is checked once per video frame the tick covers.
 void jfg_achievements_frame(uint8_t* rdram);
 // While the game isn't running frames (launcher, pause): keeps requests moving.
 void jfg_achievements_idle();

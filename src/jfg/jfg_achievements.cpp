@@ -3,7 +3,7 @@
 // RetroAchievements (RA) has a set for Jet Force Gemini (game 30). This runs RA's client library, rcheevos' rc_client,
 // against the recompiled game: it reads the game's RDRAM, which N64Recomp keeps in the layout RA's sets were made
 // against (the N64's 8 MB at offsets 0-0x7FFFFF, as 32-bit words in host byte order, the way mupen64plus stores it),
-// and evaluates the set once per game frame (jfg_debug_frame).
+// and evaluates the set once per video frame (jfg_debug_frame, see jfg_achievements_frame).
 //
 // - Casual only. RA turns unlocks from a client it hasn't approved into softcore unlocks, and a recompilation is not
 //   an approved emulator, so hardcore is never asked for. Everything the port adds (modern controls, 60 FPS, cutscene
@@ -12,13 +12,15 @@
 //   password once: RA hands back a token, which is kept in retroachievements.json in the app folder; the password is
 //   not stored. Logging out deletes it.
 // - Requests go to RA on worker threads (jfg_http_request); their replies are handed to rc_client on the game thread.
-// - Built only when rcheevos is in lib/rcheevos (JFG_HAS_RCHEEVOS); otherwise these functions do nothing.
+// - Built from the lib/rcheevos submodule (JFG_HAS_RCHEEVOS); with -DJFG_RETROACHIEVEMENTS=OFF these functions do nothing.
 //
 // See docs/RETROACHIEVEMENTS.md.
 #include "jfg_achievements.h"
 
 #ifdef JFG_HAS_RCHEEVOS
 
+#include <algorithm>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -36,7 +38,9 @@
 #include "rc_client.h"
 #include "rc_consoles.h"
 
+#include "jfg/jfg_options.h"
 #include "jfg/jfg_update_check.h"
+#include "librecomp/mods.hpp"
 
 // Badge images (PNG): a private copy of stb_image, PNG only.
 #define STB_IMAGE_STATIC
@@ -45,11 +49,13 @@
 #include "../../lib/rt64/src/contrib/stb/stb_image.h"
 #include <map>
 #include <memory>
+#include <set>
 
 namespace fs = std::filesystem;
 
 namespace {
 constexpr uint32_t RDRAM_SIZE = 0x800000; // RA's N64 map: 8 MB of RDRAM (with the expansion pak)
+constexpr uint32_t DELAY_DAT_OFFSET = 0xA3374; // delayDat (jfg_game.h ADDR_delayDat): video frames this tick covers
 
 rc_client_t* g_client = nullptr;
 fs::path g_folder;                 // the app folder
@@ -232,6 +238,10 @@ void save_token(const char* username, const char* token) {
     j["token"] = token;
     std::ofstream out(token_file(), std::ios::trunc);
     out << j.dump(2) << "\n";
+    out.close();
+    // Only the token is kept (never the password), readable by the player's account alone where permissions apply.
+    std::error_code ec;
+    fs::permissions(token_file(), fs::perms::owner_read | fs::perms::owner_write, fs::perm_options::replace, ec);
 }
 
 void RC_CCONV login_done(int result, const char* error, rc_client_t* client, void*) {
@@ -254,6 +264,8 @@ void RC_CCONV login_done(int result, const char* error, rc_client_t* client, voi
     }
 }
 
+std::string options_caution(); // below
+
 void RC_CCONV game_loaded(int result, const char* error, rc_client_t* client, void*) {
     if (result != RC_OK) {
         log_line(std::string("game not loaded: ") + (error != nullptr ? error : "unknown error"));
@@ -275,6 +287,8 @@ void RC_CCONV game_loaded(int result, const char* error, rc_client_t* client, vo
         banner("RetroAchievements", game->title,
                std::to_string(summary.num_unlocked_achievements) + " of " + std::to_string(summary.num_core_achievements) +
                    " achievements unlocked (casual)", 0);
+        const std::string caution = options_caution();
+        if (!caution.empty()) banner("RetroAchievements", "Note", caution, 0);
     }
 }
 
@@ -287,6 +301,56 @@ void ensure_client() {
     char clause[128] = {};
     rc_client_get_user_agent_clause(g_client, clause, sizeof(clause));
     g_user_agent = "JetForceGeminiRecompiled/" + g_version + " " + clause;
+}
+// Mods that change gameplay pause achievements: they change what the set measures (custom levels come as mods too,
+// tagged Levels). A mod tagged only HUD, Controls, Visuals or Audio doesn't; a mod without tags counts as gameplay.
+// Returns the first such mod that is on, or empty.
+std::string gameplay_mod_on() {
+    static const std::set<std::string> cosmetic = { "HUD", "Controls", "Visuals", "Audio" };
+    for (const recomp::mods::ModDetails& d : recomp::mods::get_all_mod_details("jet-force-gemini")) {
+        if (!recomp::mods::is_mod_enabled(d.mod_id) && !recomp::mods::is_mod_auto_enabled(d.mod_id)) continue;
+        bool gameplay = d.tags.empty();
+        for (const std::string& tag : d.tags) {
+            if (cosmetic.count(tag) == 0) gameplay = true;
+        }
+        if (gameplay) return d.display_name.empty() ? d.mod_id : d.display_name;
+    }
+    return {};
+}
+
+// Keep Area Progress and Permanent Tribal Saves let an area's challenge be split over several visits or loads, which
+// makes the timed and "in one visit" Tribal achievements easier (Rover Rescue, They're All Boxed In, We Aren't Looking
+// for Diamonds, Struck in the Muck, Strength of the Wielder). They're warned about, not paused: most players keep them on.
+std::string options_caution() {
+    if (!jfg::g.keep_area_progress && !jfg::g.permanent_tribals) return {};
+    const std::string which = jfg::g.keep_area_progress && jfg::g.permanent_tribals ? "Keep Area Progress and Permanent Tribal Saves are"
+                            : jfg::g.keep_area_progress ? "Keep Area Progress is" : "Permanent Tribal Saves is";
+    return which + " on: some \"in one visit\" Tribal achievements are easier with it. Turn it off (Gameplay) to earn those as designed.";
+}
+
+// Once a second (game thread, and the launcher's while the game isn't running): pauses or resumes achievements, with
+// a banner when that changes.
+void update_pause() {
+    thread_local auto next_check = std::chrono::steady_clock::time_point{};
+    const auto now = std::chrono::steady_clock::now();
+    if (now < next_check) return;
+    next_check = now + std::chrono::seconds(1);
+    const std::string mod = gameplay_mod_on();
+    const std::string paused = mod.empty() ? std::string() : mod + " changes gameplay; turn it off to earn achievements.";
+    const std::string caution = options_caution();
+    std::string was;
+    {
+        std::lock_guard lock(g_status_mutex);
+        if (g_status.paused == paused && g_status.caution == caution) return;
+        was = g_status.paused;
+        g_status.paused = paused;
+        g_status.caution = caution;
+        g_status.serial++;
+    }
+    if (was != paused) {
+        if (!paused.empty()) banner("Achievements paused", mod, "This mod changes gameplay. Turn it off to earn achievements.", 0);
+        else if (!was.empty()) banner("Achievements resumed", "", "", 0);
+    }
 }
 } // namespace
 
@@ -331,7 +395,9 @@ void jfg_achievements_logout() {
     g_game_requested = false;
     {
         std::lock_guard lock(g_status_mutex);
-        g_status = JfgRaStatus{ JfgRaState::LoggedOut, "", "", 0, 0, 0, false, g_status.serial + 1 };
+        const uint32_t serial = g_status.serial + 1;
+        g_status = JfgRaStatus{};
+        g_status.serial = serial;
     }
 }
 
@@ -355,12 +421,23 @@ void jfg_achievements_frame(uint8_t* rdram) {
                                                    game_loaded, nullptr);
         }
     }
-    rc_client_do_frame(g_client);
+    update_pause();
+    if (!jfg_achievements_status().paused.empty()) {
+        rc_client_idle(g_client); // keeps the session and its requests going, without checking achievements
+        return;
+    }
+    // Emulators check the set once per video frame (60 a second), and its hit counts ("for 400 frames") are made for
+    // that. A game tick covers 2-3 video frames at the original frame rate and 1 at 60 fps (delayDat, the frames the
+    // game advances its own timers by), so the set is checked that many times; memory doesn't change in between, as
+    // in an emulator while the game waits for its next frame.
+    const uint32_t frames = std::clamp<uint32_t>(*reinterpret_cast<const uint32_t*>(rdram + DELAY_DAT_OFFSET), 1, 6);
+    for (uint32_t i = 0; i < frames; i++) rc_client_do_frame(g_client);
 }
 
 void jfg_achievements_idle() {
     if (g_client == nullptr) return;
     run_replies();
+    update_pause();
     rc_client_idle(g_client);
 }
 

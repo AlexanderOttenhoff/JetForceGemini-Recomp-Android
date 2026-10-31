@@ -331,9 +331,14 @@ target_link_libraries(JetForceGeminiRecompiled PRIVATE
     lunasvg
 )
 
-# JFG PORT: RetroAchievements (casual), when rcheevos is in lib/rcheevos (src/jfg/jfg_achievements.cpp). Without it
-# the game builds as before and RetroAchievements is off.
-if (EXISTS ${CMAKE_SOURCE_DIR}/lib/rcheevos/include/rc_client.h)
+# JFG PORT: RetroAchievements (casual), from the lib/rcheevos submodule (src/jfg/jfg_achievements.cpp). A missing
+# submodule stops the configure step rather than leaving RetroAchievements out of a release quietly; a build without it
+# has to say so with -DJFG_RETROACHIEVEMENTS=OFF.
+option(JFG_RETROACHIEVEMENTS "Build RetroAchievements support (needs the lib/rcheevos submodule)" ON)
+if (JFG_RETROACHIEVEMENTS AND NOT EXISTS ${CMAKE_SOURCE_DIR}/lib/rcheevos/include/rc_client.h)
+    message(FATAL_ERROR "lib/rcheevos is missing: run 'git submodule update --init lib/rcheevos', or configure with -DJFG_RETROACHIEVEMENTS=OFF to build without RetroAchievements.")
+endif()
+if (JFG_RETROACHIEVEMENTS)
     file(GLOB_RECURSE RCHEEVOS_SOURCES ${CMAKE_SOURCE_DIR}/lib/rcheevos/src/*.c)
     list(FILTER RCHEEVOS_SOURCES EXCLUDE REGEX "rc_libretro\\.c$|rc_client_raintegration\\.c$")
     add_library(rcheevos STATIC ${RCHEEVOS_SOURCES})
@@ -343,7 +348,7 @@ if (EXISTS ${CMAKE_SOURCE_DIR}/lib/rcheevos/include/rc_client.h)
     target_link_libraries(JetForceGeminiRecompiled PRIVATE rcheevos)
     message(STATUS "RetroAchievements: on (lib/rcheevos)")
 else()
-    message(STATUS "RetroAchievements: off (no lib/rcheevos)")
+    message(STATUS "RetroAchievements: off (JFG_RETROACHIEVEMENTS=OFF)")
 endif()
 
 if (${WIN32})

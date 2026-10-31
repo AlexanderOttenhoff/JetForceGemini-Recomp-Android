@@ -12,7 +12,8 @@ been tested yet.
 
 Open the launcher's **Achievements** page, enter your RetroAchievements username and password and choose **Log in**.
 The password is used once and isn't stored: the game keeps only RetroAchievements' login token (in
-`retroachievements.json` in the game's folder) and logs in with it next time. **Log out** removes it. Nothing runs and
+`retroachievements.json` in the game's folder, readable only by your account on Linux and Android) and logs in with
+it next time. **Log out** removes it. Nothing runs and
 nothing is sent to RetroAchievements until you log in.
 
 Once the game is running, the page shows how many of the set's achievements you have.
@@ -35,7 +36,9 @@ Once the game is running, the page shows how many of the set's achievements you 
   against (offsets 0-0x7FFFFF, 32-bit words in host byte order, as mupen64plus stores it).
 - The set is checked once per game frame. Network requests run on their own threads; their replies are handled on
   the game thread.
-- Requests use `jfg_http_request` (Android: the app's Java HTTPS helpers; Linux: curl). Windows is not done yet, so
-  RetroAchievements doesn't connect there.
+- Requests use `jfg_http_request`: Android, the app's Java HTTPS helpers; Windows, WinHTTP; Linux, curl, started
+  without a shell, with the request body on its standard input. The password is never on a command line or in a file.
+- `lib/rcheevos` is a submodule pinned to the v12.5.0 tag. CMake stops if it is missing; configure with
+  `-DJFG_RETROACHIEVEMENTS=OFF` to build without RetroAchievements.
 - The port gives the game a larger heap than the N64 had (docs/MEMORY.md). Achievements that follow pointers are
   unaffected; any that read fixed heap addresses could behave differently.
