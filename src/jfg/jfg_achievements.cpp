@@ -8,10 +8,9 @@
 // - Casual only. RA turns unlocks from a client it hasn't approved into softcore unlocks, and a recompilation is not
 //   an approved emulator, so hardcore is never asked for. Everything the port adds (modern controls, 60 FPS, cutscene
 //   skip, cheats) stays available.
-// - Nothing runs and nothing is sent until the player has logged in. Logging in uses the password once: RA hands back
-//   a token, which is kept in retroachievements.json in the app folder; the password is not stored.
-// - First pass: the login comes from retroachievements.txt in the app folder (username= and password= lines), which
-//   is deleted once it has been read. A login form in the launcher is still to do.
+// - Nothing runs and nothing is sent until the player logs in on the launcher's Achievements page. Logging in uses the
+//   password once: RA hands back a token, which is kept in retroachievements.json in the app folder; the password is
+//   not stored. Logging out deletes it.
 // - Requests go to RA on worker threads (jfg_http_request); their replies are handed to rc_client on the game thread.
 // - Built only when rcheevos is in lib/rcheevos (JFG_HAS_RCHEEVOS); otherwise these functions do nothing.
 //
@@ -45,6 +44,7 @@ constexpr uint32_t RDRAM_SIZE = 0x800000; // RA's N64 map: 8 MB of RDRAM (with t
 
 rc_client_t* g_client = nullptr;
 fs::path g_folder;                 // the app folder
+std::string g_version;
 std::string g_user_agent;
 std::atomic<uint8_t*> g_rdram{ nullptr };
 std::atomic<bool> g_game_requested{ false };
@@ -52,6 +52,17 @@ std::atomic<bool> g_game_requested{ false };
 // Replies from the worker threads, handed to rc_client on the game thread.
 std::mutex g_reply_mutex;
 std::deque<std::function<void()>> g_replies;
+
+// What the launcher's Achievements page shows (jfg_achievements_status).
+std::mutex g_status_mutex;
+JfgRaStatus g_status;
+
+void set_status(JfgRaState state, const std::string& message) {
+    std::lock_guard lock(g_status_mutex);
+    g_status.state = state;
+    g_status.message = message;
+    g_status.serial++;
+}
 
 // The last unlock, for the overlay (jfg_tick.cpp).
 std::mutex g_toast_mutex;
@@ -137,7 +148,6 @@ void RC_CCONV log_message(const char* message, const rc_client_t*) {
 }
 
 fs::path token_file() { return g_folder / "retroachievements.json"; }
-fs::path login_file() { return g_folder / "retroachievements.txt"; }
 
 void save_token(const char* username, const char* token) {
     nlohmann::json j;
@@ -149,14 +159,21 @@ void save_token(const char* username, const char* token) {
 
 void RC_CCONV login_done(int result, const char* error, rc_client_t* client, void*) {
     if (result != RC_OK) {
-        log_line(std::string("login failed: ") + (error != nullptr ? error : "unknown error"));
-        toast("RetroAchievements: login failed");
+        const std::string why = error != nullptr ? error : "unknown error";
+        log_line("login failed: " + why);
+        set_status(JfgRaState::Failed, why);
         return;
     }
     const rc_client_user_t* user = rc_client_get_user_info(client);
     if (user != nullptr) {
         save_token(user->username, user->token);
         log_line(std::string("logged in as ") + user->display_name);
+        {
+            std::lock_guard lock(g_status_mutex);
+            g_status.user = user->display_name;
+            g_status.points = user->score_softcore;
+        }
+        set_status(JfgRaState::LoggedIn, "");
     }
 }
 
@@ -171,53 +188,68 @@ void RC_CCONV game_loaded(int result, const char* error, rc_client_t* client, vo
     if (game != nullptr) {
         log_line(std::string("game: ") + game->title + ", " + std::to_string(summary.num_unlocked_achievements) + "/" +
                  std::to_string(summary.num_core_achievements) + " unlocked");
+        {
+            std::lock_guard lock(g_status_mutex);
+            g_status.game_loaded = true;
+            g_status.unlocked = summary.num_unlocked_achievements;
+            g_status.total = summary.num_core_achievements;
+            g_status.serial++;
+        }
         toast(std::string("RetroAchievements: ") + std::to_string(summary.num_unlocked_achievements) + "/" +
               std::to_string(summary.num_core_achievements) + " unlocked (casual)");
     }
 }
 
-// The login: the stored token, else a one-time username and password from retroachievements.txt.
-void begin_login() {
-    std::ifstream tokens(token_file());
-    if (tokens) {
-        nlohmann::json j = nlohmann::json::parse(tokens, nullptr, false);
-        if (j.is_object() && j.contains("username") && j.contains("token")) {
-            const std::string user = j["username"].get<std::string>(), token = j["token"].get<std::string>();
-            rc_client_begin_login_with_token(g_client, user.c_str(), token.c_str(), login_done, nullptr);
-            return;
-        }
-    }
-    std::ifstream login(login_file());
-    if (!login) return;
-    std::string line, user, password;
-    while (std::getline(login, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        if (line.rfind("username=", 0) == 0) user = line.substr(9);
-        else if (line.rfind("password=", 0) == 0) password = line.substr(9);
-    }
-    login.close();
-    std::error_code ec;
-    fs::remove(login_file(), ec); // the password is not kept
-    if (!user.empty() && !password.empty()) {
-        rc_client_begin_login_with_password(g_client, user.c_str(), password.c_str(), login_done, nullptr);
-    }
-}
-} // namespace
-
-void jfg_achievements_init(const fs::path& app_folder, const std::string& version) {
+void ensure_client() {
     if (g_client != nullptr) return;
-    g_folder = app_folder;
-    std::error_code ec;
-    if (!fs::exists(token_file(), ec) && !fs::exists(login_file(), ec)) return; // not set up: nothing runs
-
     g_client = rc_client_create(read_memory, server_call);
     rc_client_enable_logging(g_client, RC_CLIENT_LOG_LEVEL_WARN, log_message);
     rc_client_set_event_handler(g_client, event_handler);
     rc_client_set_hardcore_enabled(g_client, 0); // casual only
     char clause[128] = {};
     rc_client_get_user_agent_clause(g_client, clause, sizeof(clause));
-    g_user_agent = "JetForceGeminiRecompiled/" + version + " " + clause;
-    begin_login();
+    g_user_agent = "JetForceGeminiRecompiled/" + g_version + " " + clause;
+}
+} // namespace
+
+void jfg_achievements_init(const fs::path& app_folder, const std::string& version) {
+    g_folder = app_folder;
+    g_version = version;
+    // A login from an earlier run: its token. Without one nothing runs until the player logs in on the launcher.
+    std::ifstream tokens(token_file());
+    if (!tokens) return;
+    nlohmann::json j = nlohmann::json::parse(tokens, nullptr, false);
+    if (!j.is_object() || !j.contains("username") || !j.contains("token")) return;
+    const std::string user = j["username"].get<std::string>(), token = j["token"].get<std::string>();
+    ensure_client();
+    set_status(JfgRaState::LoggingIn, "");
+    rc_client_begin_login_with_token(g_client, user.c_str(), token.c_str(), login_done, nullptr);
+}
+
+void jfg_achievements_login(const std::string& user, const std::string& password) {
+    if (user.empty() || password.empty()) {
+        set_status(JfgRaState::Failed, "Enter your username and password.");
+        return;
+    }
+    ensure_client();
+    set_status(JfgRaState::LoggingIn, "");
+    rc_client_begin_login_with_password(g_client, user.c_str(), password.c_str(), login_done, nullptr);
+}
+
+void jfg_achievements_logout() {
+    if (g_client != nullptr) rc_client_logout(g_client);
+    std::error_code ec;
+    fs::remove(token_file(), ec);
+    g_game_requested = false;
+    {
+        std::lock_guard lock(g_status_mutex);
+        g_status = JfgRaStatus{ JfgRaState::LoggedOut, "", "", 0, 0, 0, false, g_status.serial + 1 };
+    }
+}
+
+JfgRaStatus jfg_achievements_status() {
+    std::lock_guard lock(g_status_mutex);
+    return g_status;
 }
 
 void jfg_achievements_frame(uint8_t* rdram) {
@@ -255,6 +287,14 @@ bool jfg_achievements_toast(std::string& text, float& seconds) {
 #else // no rcheevos: RetroAchievements is off
 
 void jfg_achievements_init(const std::filesystem::path&, const std::string&) {}
+void jfg_achievements_login(const std::string&, const std::string&) {}
+void jfg_achievements_logout() {}
+JfgRaStatus jfg_achievements_status() {
+    JfgRaStatus status;
+    status.state = JfgRaState::Failed;
+    status.message = "This build has no RetroAchievements support.";
+    return status;
+}
 void jfg_achievements_frame(uint8_t*) {}
 void jfg_achievements_idle() {}
 bool jfg_achievements_toast(std::string&, float&) { return false; }

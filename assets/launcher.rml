@@ -39,7 +39,7 @@
 			.rl-wordmark__top { display: block; font-size: 35dp; line-height: 40dp; color: #E8202A; }
 			.rl-wordmark__main { display: block; font-size: 59dp; line-height: 68dp; color: #3CC8FF; }
 			.rl-wordmark__sub { display: block; font-size: 19dp; line-height: 24dp; color: #8199BF; margin-top: 8dp; }
-			.rl-btn-shadow { display: block; position: relative; height: 50dp; margin: 0dp 0dp 13dp 4dp; background-color: #0A2660; }
+			.rl-btn-shadow { display: block; position: relative; height: 50dp; margin: 0dp 0dp 8dp 4dp; background-color: #0A2660; }
 			.rl-btn { display: block; position: relative; top: -4dp; left: -4dp; width: 100%; height: 50dp; box-sizing: border-box;
 				border-width: 2dp; border-color: #3CC8FF; background-color: #050B1C; color: #3CC8FF;
 				font-family: "JFG Black"; font-weight: normal; font-size: 20dp; line-height: 46dp; text-align: center; text-transform: uppercase;
@@ -378,6 +378,10 @@
 			.st-result { display: block; margin-top: 12dp; font-family: "JetBrains Mono"; font-size: 17dp; line-height: 24dp; color: #8199BF; }
 			/* JFG PORT: handheld layout (Android): desktop-only settings and keyboard hints. */
 			body.handheld .jfg-desktop-only { display: none; }
+			/* Achievements page */
+			.ra-field { display: block; margin-top: 18dp; max-width: 640dp; }
+			.ra-label { display: block; font-size: 19dp; line-height: 26dp; color: #8199BF; margin-bottom: 6dp; }
+			.ra-input { display: block; width: 100%; margin-right: 0dp; }
 		</style>
 	</head>
 	<body>
@@ -415,9 +419,11 @@
 							<div class="rl-btn-shadow"><button id="tab_mods" class="rl-btn" data-class-rl-active="page == 'mods'"
 								data-event-focus="set_page('mods')" style="nav-up: #tab_jfg_textures; nav-down: #tab_store; nav-right: auto;">Mods</button></div>
 							<div class="rl-btn-shadow"><button id="tab_store" class="rl-btn" data-class-rl-active="page == 'store'"
-								data-event-focus="set_page('store')" style="nav-up: #tab_mods; nav-down: #nav_about; nav-right: #st_filter_all;">Get Mods</button></div>
+								data-event-focus="set_page('store')" style="nav-up: #tab_mods; nav-down: #nav_achievements; nav-right: #st_filter_all;">Get Mods</button></div>
+							<div class="rl-btn-shadow"><button id="nav_achievements" class="rl-btn" data-class-rl-active="page == 'achievements'"
+								data-event-focus="set_page('achievements')" style="nav-up: #tab_store; nav-down: #nav_about; nav-right: #ra_user;">Achievements</button></div>
 							<div class="rl-btn-shadow"><button id="nav_about" class="rl-btn" data-class-rl-active="page == 'about'"
-								data-event-focus="set_page('about')" style="nav-up: #tab_store; nav-down: #nav_exit;">About</button></div>
+								data-event-focus="set_page('about')" style="nav-up: #nav_achievements; nav-down: #nav_exit;">About</button></div>
 							<div class="rl-separator"></div>
 							<div class="rl-btn-shadow"><button id="nav_exit" class="rl-btn rl-btn--exit" onclick="exit_game"
 								style="nav-up: #nav_about; nav-down: #nav_play;">Exit</button></div>
@@ -622,6 +628,30 @@
 								</div>
 
 								<!-- About -->
+								<!-- Achievements: RetroAchievements in casual mode (src/jfg/jfg_achievements.cpp) -->
+								<div class="rl-page rl-page-scroll" id="rl_page_achievements" data-if="page == 'achievements'">
+									<div class="rl-block-shadow"><div class="rl-block">
+										<div class="rl-heading">RetroAchievements</div>
+										<div class="rl-text">{{ra_status}}</div>
+										<div data-if="!ra_logged_in">
+											<div class="ra-field"><div class="ra-label">Username</div>
+												<input type="text" id="ra_user" class="st-add-text ra-input" data-value="ra_user" maxlength="64" style="nav-left: #nav_achievements; nav-up: none; nav-down: #ra_pass;"/></div>
+											<div class="ra-field"><div class="ra-label">Password</div>
+												<input type="password" id="ra_pass" class="st-add-text ra-input" data-value="ra_pass" maxlength="128" style="nav-left: #nav_achievements; nav-up: #ra_user; nav-down: #ra_login;"/></div>
+											<div class="rl-action-shadow"><button id="ra_login" class="rl-action" data-event-click="ra_login()" data-attrif-disabled="ra_busy"
+												style="nav-left: #nav_achievements; nav-up: #ra_pass; nav-down: none;">Log in</button></div>
+										</div>
+										<div data-if="ra_logged_in">
+											<div class="rl-text">{{ra_progress}}</div>
+											<div class="rl-action-shadow"><button id="ra_logout" class="rl-action rl-action--outline" data-event-click="ra_logout()"
+												style="nav-left: #nav_achievements; nav-up: none; nav-down: none;">Log out</button></div>
+										</div>
+									</div></div>
+									<div class="rl-block-shadow"><div class="rl-block">
+										<div class="rl-heading">How it works</div>
+										<div class="rl-text rl-muted">Achievements are earned in casual (softcore) mode, with every setting of this port available. Your password is used once to log in and isn't stored; the game keeps only RetroAchievements' login token, and Log out removes it. Nothing is sent to RetroAchievements until you log in.</div>
+									</div></div>
+								</div>
 								<div class="rl-page rl-page-scroll" id="rl_page_about" data-if="page == 'about'">
 									<div class="rl-about">
 										<div class="rl-about-left">
