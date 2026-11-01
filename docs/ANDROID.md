@@ -14,6 +14,11 @@ There are no touch controls (use the handheld's buttons or a controller).
 3. Saves, settings, mods and texture packs are kept in `Android/data/io.github.jfgrecomp/files` on the device's
    storage (visible from a PC over USB).
 
+The settings without an effect on Android are hidden: Window Mode (always full screen), Graphics API (always Vulkan),
+Update Channel (the releases are desktop builds; the APK updates through your launcher) and Background Input (the app
+reads no input in the background). The keyboard shortcuts in the launcher's notes and the Texture Packs folder button
+are hidden too.
+
 If the screen stays black or the game closes at start, the GPU driver may be the cause: on Adreno, a
 [Turnip driver](https://github.com/MrPurple666/purple-turnip/releases) often helps.
 

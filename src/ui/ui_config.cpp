@@ -1525,6 +1525,14 @@ public:
     static inline bool jfg_show_advanced = false;
     void bind_advanced_hidden(Rml::DataModelConstructor& constructor) {
         constructor.BindFunc("advanced_hidden", [](Rml::Variant& out) { out = !jfg_show_advanced; });
+        // And the options with no effect on Android (tools/gen_jfg_config_rml.py, ANDROID_HIDDEN_KEYS).
+        constructor.BindFunc("android_hidden", [](Rml::Variant& out) {
+#ifdef __ANDROID__
+            out = true;
+#else
+            out = false;
+#endif
+        });
     }
 
     // JFG PORT: one binding per option key, read and written through jfg::settings (or upstream_options).
