@@ -17,8 +17,7 @@ struct JfgRaStatus {
     uint32_t unlocked = 0; // this game's achievements: unlocked and in total, once the game is loaded
     uint32_t total = 0;
     bool game_loaded = false;
-    std::string paused;    // why achievements are paused (a gameplay mod is on), or empty while they count
-    std::string caution;   // options on that make some achievements easier, or empty
+    std::string caution;   // gameplay mods or options on that make some achievements easier, or empty
     uint32_t serial = 0;   // changes whenever anything above does
 };
 

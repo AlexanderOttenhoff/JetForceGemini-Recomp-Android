@@ -302,55 +302,56 @@ void ensure_client() {
     rc_client_get_user_agent_clause(g_client, clause, sizeof(clause));
     g_user_agent = "JetForceGeminiRecompiled/" + g_version + " " + clause;
 }
-// Mods that change gameplay pause achievements: they change what the set measures (custom levels come as mods too,
-// tagged Levels). A mod tagged only HUD, Controls, Visuals or Audio doesn't; a mod without tags counts as gameplay.
-// Returns the first such mod that is on, or empty.
-std::string gameplay_mod_on() {
+// Mods that change gameplay are warned about, like the options below: achievements keep counting (casual mode allows
+// save states, which change far more), but a mod can make some of them easier. Custom levels come as mods too, tagged
+// Levels. A mod tagged only HUD, Controls, Visuals or Audio isn't mentioned; a mod without tags counts as gameplay.
+// Returns the gameplay mods that are on, by name.
+std::vector<std::string> gameplay_mods_on() {
     static const std::set<std::string> cosmetic = { "HUD", "Controls", "Visuals", "Audio" };
+    std::vector<std::string> names;
     for (const recomp::mods::ModDetails& d : recomp::mods::get_all_mod_details("jet-force-gemini")) {
         if (!recomp::mods::is_mod_enabled(d.mod_id) && !recomp::mods::is_mod_auto_enabled(d.mod_id)) continue;
         bool gameplay = d.tags.empty();
         for (const std::string& tag : d.tags) {
             if (cosmetic.count(tag) == 0) gameplay = true;
         }
-        if (gameplay) return d.display_name.empty() ? d.mod_id : d.display_name;
+        if (gameplay) names.push_back(d.display_name.empty() ? d.mod_id : d.display_name);
     }
-    return {};
+    return names;
 }
 
 // Keep Area Progress and Permanent Tribal Saves let an area's challenge be split over several visits or loads, which
 // makes the timed and "in one visit" Tribal achievements easier (Rover Rescue, They're All Boxed In, We Aren't Looking
-// for Diamonds, Struck in the Muck, Strength of the Wielder). They're warned about, not paused: most players keep them on.
+// for Diamonds, Struck in the Muck, Strength of the Wielder). Like gameplay mods, they're warned about, not paused: most
+// players keep them on.
 std::string options_caution() {
-    if (!jfg::g.keep_area_progress && !jfg::g.permanent_tribals) return {};
-    const std::string which = jfg::g.keep_area_progress && jfg::g.permanent_tribals ? "Keep Area Progress and Permanent Tribal Saves are"
-                            : jfg::g.keep_area_progress ? "Keep Area Progress is" : "Permanent Tribal Saves is";
-    return which + " on: some \"in one visit\" Tribal achievements are easier with it. Turn it off (Gameplay), or pick the Modern (Achievements) profile, to earn those as designed.";
+    std::string out;
+    const std::vector<std::string> mods = gameplay_mods_on();
+    if (!mods.empty()) {
+        out = mods.size() == 1 ? mods[0] + " changes gameplay"
+                               : mods[0] + " and " + std::to_string(mods.size() - 1) + " more mods change gameplay";
+        out += ": achievements still count, but some may be easier.";
+    }
+    if (jfg::g.keep_area_progress || jfg::g.permanent_tribals) {
+        const std::string which = jfg::g.keep_area_progress && jfg::g.permanent_tribals ? "Keep Area Progress and Permanent Tribal Saves are"
+                                : jfg::g.keep_area_progress ? "Keep Area Progress is" : "Permanent Tribal Saves is";
+        if (!out.empty()) out += " ";
+        out += which + " on: some \"in one visit\" Tribal achievements are easier with it. Turn it off (Gameplay), or pick the Modern (Achievements) profile, to earn those as designed.";
+    }
+    return out;
 }
 
-// Once a second (game thread, and the launcher's while the game isn't running): pauses or resumes achievements, with
-// a banner when that changes.
-void update_pause() {
+// Once a second (game thread, and the launcher's while the game isn't running): the note the launcher shows.
+void update_caution() {
     thread_local auto next_check = std::chrono::steady_clock::time_point{};
     const auto now = std::chrono::steady_clock::now();
     if (now < next_check) return;
     next_check = now + std::chrono::seconds(1);
-    const std::string mod = gameplay_mod_on();
-    const std::string paused = mod.empty() ? std::string() : mod + " changes gameplay; turn it off to earn achievements.";
     const std::string caution = options_caution();
-    std::string was;
-    {
-        std::lock_guard lock(g_status_mutex);
-        if (g_status.paused == paused && g_status.caution == caution) return;
-        was = g_status.paused;
-        g_status.paused = paused;
-        g_status.caution = caution;
-        g_status.serial++;
-    }
-    if (was != paused) {
-        if (!paused.empty()) banner("Achievements paused", mod, "This mod changes gameplay. Turn it off to earn achievements.", 0);
-        else if (!was.empty()) banner("Achievements resumed", "", "", 0);
-    }
+    std::lock_guard lock(g_status_mutex);
+    if (g_status.caution == caution) return;
+    g_status.caution = caution;
+    g_status.serial++;
 }
 } // namespace
 
@@ -421,11 +422,7 @@ void jfg_achievements_frame(uint8_t* rdram) {
                                                    game_loaded, nullptr);
         }
     }
-    update_pause();
-    if (!jfg_achievements_status().paused.empty()) {
-        rc_client_idle(g_client); // keeps the session and its requests going, without checking achievements
-        return;
-    }
+    update_caution();
     // Emulators check the set once per video frame (60 a second), and its hit counts ("for 400 frames") are made for
     // that. A game tick covers 2-3 video frames at the original frame rate and 1 at 60 fps (delayDat, the frames the
     // game advances its own timers by), so the set is checked that many times; memory doesn't change in between, as
@@ -437,7 +434,7 @@ void jfg_achievements_frame(uint8_t* rdram) {
 void jfg_achievements_idle() {
     if (g_client == nullptr) return;
     run_replies();
-    update_pause();
+    update_caution();
     rc_client_idle(g_client);
 }
 

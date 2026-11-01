@@ -377,7 +377,6 @@
 			.ra-field { display: block; margin-top: 18dp; max-width: 640dp; }
 			.ra-label { display: block; font-size: 19dp; line-height: 26dp; color: #8199BF; margin-bottom: 6dp; }
 			.ra-input { display: block; width: 100%; margin-right: 0dp; }
-			.ra-paused { color: #FF6B5E; }
 			.ra-block { margin-top: 24dp; }
 			.st-progress { display: block; margin-top: 20dp; }
 			.st-progress-text { display: block; margin-bottom: 8dp; font-family: "JetBrains Mono"; font-size: 18dp; color: #E8F3FF; }
@@ -515,7 +514,6 @@
 										</div>
 										<div data-if="ra_logged_in">
 											<div class="rl-text">{{ra_progress}}</div>
-											<div class="rl-text ra-paused" data-if="ra_paused != ''">Achievements paused: {{ra_paused}}</div>
 											<div class="rl-text rl-muted" data-if="ra_caution != ''">{{ra_caution}}</div>
 											<div class="rl-action-shadow"><button id="ra_logout" class="rl-action rl-action--outline" data-event-click="ra_logout()"
 												style="nav-left: #nav_play; nav-down: #rl_changelogs;" data-style-nav-up="rom_valid ? '#rl_skip_launcher' : '#rl_start'">Log out</button></div>

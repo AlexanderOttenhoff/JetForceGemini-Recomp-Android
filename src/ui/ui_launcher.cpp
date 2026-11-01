@@ -462,7 +462,7 @@ void jfg_launcher_ui_tick() {
         const JfgRaStatus ra = jfg_achievements_status();
         if (ra.serial != ra_serial_seen) {
             ra_serial_seen = ra.serial;
-            for (const char* name : { "ra_logged_in", "ra_busy", "ra_status", "ra_progress", "ra_paused", "ra_caution" }) model_handle.DirtyVariable(name);
+            for (const char* name : { "ra_logged_in", "ra_busy", "ra_status", "ra_progress", "ra_caution" }) model_handle.DirtyVariable(name);
         }
     }
     jfg::locale::debug_pick();
@@ -917,7 +917,6 @@ public:
             out = ra.game_loaded ? Rml::String("Jet Force Gemini: " + std::to_string(ra.unlocked) + " of " + std::to_string(ra.total) + " achievements unlocked")
                                  : Rml::String("Your progress shows here once the game has started.");
         });
-        constructor.BindFunc("ra_paused", [](Rml::Variant& out) { out = Rml::String(jfg_achievements_status().paused); });
         constructor.BindFunc("ra_caution", [](Rml::Variant& out) { out = Rml::String(jfg_achievements_status().caution); });
         constructor.BindEventCallback("ra_login", [](Rml::DataModelHandle handle, Rml::Event&, const Rml::VariantList&) {
             jfg_achievements_login(ra_user, ra_pass);

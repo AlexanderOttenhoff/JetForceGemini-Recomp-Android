@@ -26,6 +26,21 @@ Once the game is running, the block shows how many of the set's achievements you
   last, such as "no damage taken" during a boss fight), its badge is shown until it unlocks or fails, as in
   DuckStation and RetroArch. Badges are downloaded once into `ra_badges` in the game's folder.
 
+## Mods and options
+
+Achievements keep counting with every mod and option, as casual mode allows (it allows save states too). Some can make
+achievements easier, and the RetroAchievements block on the Play page, plus a banner when the game loads, says so:
+
+- **Gameplay mods**: any enabled mod with a tag other than HUD, Controls, Visuals or Audio, or with no tags. Custom
+  levels come as mods tagged Levels. The note names the first such mod and how many others are on.
+- **Keep Area Progress** and **Permanent Tribal Saves**: they let an area's challenge be split over several visits or
+  loads, which makes some "in one visit" Tribal achievements easier (Rover Rescue, They're All Boxed In, We Aren't
+  Looking for Diamonds, Struck in the Muck, Strength of the Wielder). The **Modern (Achievements)** profile is Modern
+  with both off.
+
+rcheevos can't switch single achievements off, so the choice was between this note and stopping all achievements while
+any of these is on; both options are on in the Modern profiles, and most gameplay mods are small changes.
+
 `JFG_RA_TEST_BANNER=1` shows two sample banners and a sample indicator (using `icons/64.png`), to check the look.
 
 ## How it works
@@ -34,8 +49,10 @@ Once the game is running, the block shows how many of the set's achievements you
 - The game is identified from the ROM the launcher stored (`jfg-us.z64`), with RetroAchievements' N64 hash.
 - Achievements read the game's RDRAM directly. N64Recomp keeps it in the layout RetroAchievements' N64 sets are made
   against (offsets 0-0x7FFFFF, 32-bit words in host byte order, as mupen64plus stores it).
-- The set is checked once per game frame. Network requests run on their own threads; their replies are handled on
-  the game thread.
+- The set is checked once per video frame, as in emulators: a game frame covers 2-3 video frames at the original frame
+  rate and 1 at 60 FPS (the game's `delayDat`), so it is checked that many times per game frame. Timers in the set read
+  the game's own counters, and its hit counts ("for 400 frames") assume 60 checks a second.
+- Network requests run on their own threads; their replies are handled on the game thread.
 - Requests use `jfg_http_request`: Android, the app's Java HTTPS helpers; Windows, WinHTTP; Linux, curl, started
   without a shell, with the request body on its standard input. The password is never on a command line or in a file.
 - `lib/rcheevos` is a submodule pinned to the v12.5.0 tag. CMake stops if it is missing; configure with
