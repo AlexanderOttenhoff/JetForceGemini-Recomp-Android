@@ -5,8 +5,12 @@ earn them in **casual (softcore)** mode, with every port feature available: mode
 the rest. Hardcore isn't offered: RetroAchievements only accepts hardcore unlocks from emulators it has approved, and
 a recompilation isn't one.
 
-Status: experimental. Game identification is tested (the US ROM is recognised as game 30); unlocking in play has not
-been tested yet.
+Status: experimental. Tested on the Android build (Retroid Pocket 6, this branch on dev 783271f): the US ROM is
+recognised as game 30, and Dwarf Planet Precision (30 pistol kills, a hit count) unlocked in play and shows on the
+RetroAchievements profile as a casual unlock. Not yet tested on Windows.
+
+RetroAchievements doesn't know this client, so on the first session its server also awards "Warning: Unknown
+Emulator", a placeholder it awards to clients that aren't on its list.
 
 ## Logging in
 
