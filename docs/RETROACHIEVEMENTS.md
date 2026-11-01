@@ -28,11 +28,12 @@ Once the game is running, the block shows how many of the set's achievements you
 
 ## Mods and options
 
-Achievements keep counting with every mod and option, as casual mode allows (it allows save states too). Some can make
-achievements easier, and the RetroAchievements block on the Play page, plus a banner when the game loads, says so:
+Achievements keep counting with every mod and option, as casual mode allows (it allows save states too). Some change
+how the set's challenges play, and the RetroAchievements block on the Play page, plus a banner when the game loads, says so:
 
 - **Gameplay mods**: any enabled mod with a tag other than HUD, Controls, Visuals or Audio, or with no tags. Custom
-  levels come as mods tagged Levels. The note names the first such mod and how many others are on.
+  levels come as mods tagged Levels. They can make a challenge easier or harder (more enemies, other weapons). The note
+  names the first such mod and how many others are on.
 - **Keep Area Progress** and **Permanent Tribal Saves**: they let an area's challenge be split over several visits or
   loads, which makes some "in one visit" Tribal achievements easier (Rover Rescue, They're All Boxed In, We Aren't
   Looking for Diamonds, Struck in the Muck, Strength of the Wielder). The **Modern (Achievements)** profile is Modern

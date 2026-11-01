@@ -303,7 +303,7 @@ void ensure_client() {
     g_user_agent = "JetForceGeminiRecompiled/" + g_version + " " + clause;
 }
 // Mods that change gameplay are warned about, like the options below: achievements keep counting (casual mode allows
-// save states, which change far more), but a mod can make some of them easier. Custom levels come as mods too, tagged
+// save states, which change far more), but a mod can change what a challenge asks (more enemies, other weapons). Custom levels come as mods too, tagged
 // Levels. A mod tagged only HUD, Controls, Visuals or Audio isn't mentioned; a mod without tags counts as gameplay.
 // Returns the gameplay mods that are on, by name.
 std::vector<std::string> gameplay_mods_on() {
@@ -330,7 +330,7 @@ std::string options_caution() {
     if (!mods.empty()) {
         out = mods.size() == 1 ? mods[0] + " changes gameplay"
                                : mods[0] + " and " + std::to_string(mods.size() - 1) + " more mods change gameplay";
-        out += ": achievements still count, but some may be easier.";
+        out += ": achievements still count, but their challenges may not play as designed.";
     }
     if (jfg::g.keep_area_progress || jfg::g.permanent_tribals) {
         const std::string which = jfg::g.keep_area_progress && jfg::g.permanent_tribals ? "Keep Area Progress and Permanent Tribal Saves are"
